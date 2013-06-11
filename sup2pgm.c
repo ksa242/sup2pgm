@@ -289,7 +289,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (sup_filename != NULL) {
-        if ((sup_file = fopen(sup_filename, "r")) == NULL) {
+        if ((sup_file = fopen(sup_filename, "rb")) == NULL) {
             ERROR("Failed opening SUP file %s.\n", sup_filename);
             return EXIT_FAILURE;
         }
@@ -484,7 +484,7 @@ int main(int argc, char* argv[]) {
                     if (canvas != NULL) {
                         sprintf(pgm_filename, "%s%05lu.pgm",
                                 pgm_base_filename, pgm_file_num);
-                        if ((pgm_file = fopen(pgm_filename, "w")) == NULL) {
+                        if ((pgm_file = fopen(pgm_filename, "wb")) == NULL) {
                             perror("main(): fopen(PGM)");
                             break;
                         } else {
