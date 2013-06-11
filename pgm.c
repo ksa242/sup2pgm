@@ -5,7 +5,6 @@
 
 #include <errno.h>
 
-#include "sup2pgm.h"
 #include "pgm.h"
 
 
@@ -42,7 +41,6 @@ int pgm_write(FILE* fd, unsigned char* img, size_t width, size_t height) {
     }
 
     fprintf(fd, "P5\n");
-    fprintf(fd, "# Created by %s v%s\n", SUP2PGM_PROGRAM_NAME, SUP2PGM_VERSION);
     fprintf(fd, "%lu %lu\n", width, height);
     fprintf(fd, "%u\n", max_gray);
 

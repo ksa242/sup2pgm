@@ -6,7 +6,6 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
-#include "sup2pgm.h"
 #include "sup.h"
 
 
@@ -82,7 +81,7 @@ int read_sup_packet(FILE* fd, struct sup_packet* packet) {
     } else {
         packet->marker = ntohs(packet->marker);
         if (packet->marker != SUP_PACKET_MARKER) {
-            ERROR("Invalid packet marker.\n");
+            fprintf(stderr, "Invalid packet marker.\n");
             return -1;
         }
     }
@@ -118,7 +117,7 @@ int read_sup_packet(FILE* fd, struct sup_packet* packet) {
         n = fread(packet->segment + received, 1, packet->segment_len - received, fd);
         if (n <= 0) {
             if (feof(fd)) {
-                ERROR("Unexpected EOF.\n");
+                fprintf(stderr, "Unexpected EOF.\n");
             } else {
                 perror("read_sup_packet(): fread(segment)");
             }
@@ -170,7 +169,7 @@ int parse_sup_segment_pcs(const struct sup_packet* packet, struct sup_segment_pc
     }
 
     if (packet->segment_len < 11) {
-        ERROR("PCS packet is too short.\n");
+        fprintf(stderr, "PCS packet is too short.\n");
         return -1;
     }
 
@@ -199,7 +198,7 @@ int parse_sup_segment_pcs(const struct sup_packet* packet, struct sup_segment_pc
     offset++;
 
     if (packet->segment_len != pcs->num_of_objects * 8 + offset) {
-        ERROR("Invalid PCS segment length.\n");
+        fprintf(stderr, "Invalid PCS segment length.\n");
         return -1;
     }
 
@@ -255,7 +254,7 @@ int parse_sup_segment_pds(const struct sup_packet* packet, struct sup_segment_pd
     }
 
     if (packet->segment_len < 2) {
-        ERROR("PDS packet is too short.\n");
+        fprintf(stderr, "PDS packet is too short.\n");
         return -1;
     }
 
@@ -310,7 +309,7 @@ int parse_sup_segment_wds(const struct sup_packet* packet, struct sup_segment_wd
     }
 
     if (packet->segment_len < 1) {
-        ERROR("WDS packet is too short.\n");
+        fprintf(stderr, "WDS packet is too short.\n");
         return -1;
     }
 
@@ -318,7 +317,7 @@ int parse_sup_segment_wds(const struct sup_packet* packet, struct sup_segment_wd
     offset++;
 
     if (packet->segment_len != wds->num_of_windows * 9 + offset) {
-        ERROR("Invalid WDS segment length.\n");
+        fprintf(stderr, "Invalid WDS segment length.\n");
         return -1;
     }
 
@@ -376,7 +375,7 @@ int parse_sup_segment_ods(const struct sup_packet* packet, struct sup_segment_od
     }
 
     if (packet->segment_len < 4) {
-        ERROR("ODS packet is too short.\n");
+        fprintf(stderr, "ODS packet is too short.\n");
         return -1;
     }
 
@@ -391,7 +390,7 @@ int parse_sup_segment_ods(const struct sup_packet* packet, struct sup_segment_od
 
     if (ods->obj_flag & SUP_ODS_FIRST) {
         if (packet->segment_len < 11) {
-            ERROR("First ODS packet is too short.\n");
+            fprintf(stderr, "First ODS packet is too short.\n");
             return -1;
         }
 
@@ -415,7 +414,7 @@ int parse_sup_segment_ods(const struct sup_packet* packet, struct sup_segment_od
 
     } else {
         if (packet->segment_len < 5) {
-            ERROR("ODS packet is too short.\n");
+            fprintf(stderr, "ODS packet is too short.\n");
             return -1;
         }
     }

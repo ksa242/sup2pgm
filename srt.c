@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "sup2pgm.h"
 #include "srt.h"
 
 
@@ -12,7 +11,7 @@ int srt_render_time(unsigned long ms, char* buf) {
     ms = ms - 1000 * (ms / 1000);
 
     if (hour > 99) {
-        ERROR("PTS should be less than 99 hours.\n");
+        fprintf(stderr, "PTS should be less than 99 hours.\n");
         return -1;
     }
 
