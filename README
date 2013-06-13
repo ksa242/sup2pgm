@@ -12,5 +12,6 @@ Options:
     -o <base_name>  Use base_name for output files (default: movie_subtitle).
 
 
-Public domain.  Feel free to use however you see fit, and have fun.
-Sergey Kolchin <ksa242@gmail.com>
+Copyright (c) 2013, Sergey Kolchin <ksa242@gmail.com>
+All rights reserved.
+Released under 3-clause BSD License.
