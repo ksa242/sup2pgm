@@ -11,6 +11,7 @@ Usage:  sup2pgm [options]
 Options:
     -i <file_name>  Use file_name for input (default: stdin).
     -o <base_name>  Use base_name for output files (default: movie_subtitle).
+    -v              Be verbose: dump parsed packets.
 
 
 Thanks to 0xdeadbeef for BDSup2Sub I've ripped most of the code from.
