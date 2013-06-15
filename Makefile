@@ -9,3 +9,4 @@ all: pgm.c srt.c sup.c sup2pgm.c
 .PHONY: clean
 clean:
 	-rm *.o
+	-rm $(NAME)
