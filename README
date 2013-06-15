@@ -1,10 +1,11 @@
 SUP2PGM
-Converts a SUP (BluRay) subtitle stream to PGM images.
+Converts BluRay presentation graphics streams (SUP subtitles) to PGM images
+one can later transcode or OCR into text.
 
 
-sup2pgm is made to mimic subtitle2pgm (from transcode suite, see
-http://tcforge.berlios.de/) behaviour: it reads the .SUP stream, dumps
-caption images to PGM files and saves timing to a .SRTX file.
+sup2pgm is designed to mimic the behaviour of subtitle2pgm from transcode
+suite (http://tcforge.berlios.de/).  It reads the SUP stream, dumps subtitle
+images to PGM files and saves timecodes to an SRT file.
 
 Usage:  sup2pgm [options]
 Options:
