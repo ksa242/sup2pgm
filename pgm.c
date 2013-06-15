@@ -27,7 +27,7 @@ void pgm_clear_region(unsigned char* img, size_t width, size_t height,
 }
 
 
-int pgm_write(FILE* fd, unsigned char* img, size_t width, size_t height) {
+int pgm_write(FILE* fd, const unsigned char* img, size_t width, size_t height) {
     size_t i, n, saved;
 
     size_t img_len = width * height;

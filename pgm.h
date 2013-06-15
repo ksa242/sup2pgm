@@ -7,6 +7,6 @@ void pgm_clear_region(unsigned char* img, size_t width, size_t height,
                       size_t region_width, size_t region_height,
                       size_t region_x, size_t region_y);
 
-int pgm_write(FILE* fd, unsigned char* img, size_t width, size_t height);
+int pgm_write(FILE* fd, const unsigned char* img, size_t width, size_t height);
 
 #endif  /* PGM2PGM_PGM_H */
