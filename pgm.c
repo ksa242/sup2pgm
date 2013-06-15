@@ -40,6 +40,10 @@ int pgm_write(FILE* fd, const unsigned char* img, size_t width, size_t height) {
         }
     }
 
+    if (max_gray == 0x00) {
+        return -1;
+    }
+
     fprintf(fd, "P5\n");
     fprintf(fd, "%lu %lu\n", width, height);
     fprintf(fd, "%u\n", max_gray);

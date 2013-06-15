@@ -1,9 +1,11 @@
 /**
  * SUP2PGM
- * Converts a SUP (BluRay) subtitle stream to PGM images.
+ * Converts BluRay presentation graphics streams (SUP subtitles) to PGM
+ * images one can later transcode or OCR into text.
  *
- * Public domain.  Feel free to use however you see fit, and have fun.
- * Sergey Kolchin (ksa242@gmail.com).
+ * Copyright (c) 2013, Sergey Kolchin <ksa242@gmail.com>
+ * All rights reserved.
+ * Released under 3-clause BSD License.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -20,20 +22,23 @@
 
 void print_usage_help(const char* bin) {
     printf("%s v%s\n", SUP2PGM_PROGRAM_NAME, SUP2PGM_VERSION);
-    printf("Converts a SUP (BluRay) subtitle stream to PGM images.\n\n");
+    printf("Converts BluRay presentation graphics streams (SUP subtitles) to PGM images one can later transcode or OCR into text.\n\n");
 
     printf("%s [options]\n\n", bin);
 
-    printf("%s takes SUP (BluRay) subtitle stream and dumps the captions as PGM images complete with SRT start/end timestamps.\n\n", SUP2PGM_PROGRAM_NAME);
+    printf("%s takes BD-SUP subtitle stream and dumps the captions as PGM images complete with SRT timecodes.\n\n", SUP2PGM_PROGRAM_NAME);
 
     printf("Options:\n");
     printf("  -i <file_name>  Use file_name for input (default: stdin).\n");
     printf("  -o <base_name>  Use base_name for output files (default: movie_subtitle).\n");
+    printf("  -v              Be verbose: dump parsed packets.\n");
 }
 
 
 void dump_segment_pcs(const struct sup_segment_pcs* pcs) {
     size_t i;
+
+    DEBUG("PTS %u\n", pcs->pts_msec);
 
     if (pcs->comp_state == SUP_PCS_STATE_EPOCH_START) {
         DEBUG("PCS START");
@@ -82,15 +87,16 @@ void dump_segment_pcs(const struct sup_segment_pcs* pcs) {
 
 void dump_segment_pds(const struct sup_segment_pds* pds) {
     size_t i;
-    DEBUG("PDS 0x%04x, %u color(s) in YCbCrA:\n",
+    DEBUG("PDS 0x%04x, %u color(s) in YCbCrA (grayscale):\n",
           pds->palette_id, pds->num_of_colors);
     for (i = 0; i < pds->num_of_colors; i++) {
-        DEBUG("  0x%02x: #%02x%02x%02x%02x\n",
+        DEBUG("  0x%02x: #%02x%02x%02x%02x (0x%02x)\n",
               pds->colors[i].idx,
               pds->colors[i].y,
               pds->colors[i].cb,
               pds->colors[i].cr,
-              pds->colors[i].a);
+              pds->colors[i].a,
+              pds->colors[i].gray);
     }
 }
 
@@ -129,12 +135,12 @@ void dump_segment_end(const struct sup_packet* packet) {
 }
 
 
-int decode_rle_img(unsigned char* dest, size_t dest_len,
-                   const unsigned char* src, size_t src_len,
-                   const struct sup_segment_pcs* pcs,
-                   const struct sup_segment_wds* wds,
-                   const struct sup_segment_pds* pds,
-                   const struct sup_segment_ods* ods) {
+int render_sup_image(unsigned char* dest, size_t dest_len,
+                     const unsigned char* src, size_t src_len,
+                     const struct sup_segment_pcs* pcs,
+                     const struct sup_segment_wds* wds,
+                     const struct sup_segment_pds* pds,
+                     const struct sup_segment_ods* ods) {
 
     size_t video_width = pcs->video_width,
            video_height = pcs->video_height,
@@ -202,7 +208,7 @@ int decode_rle_img(unsigned char* dest, size_t dest_len,
                 } else if ((b & 0xC0) == 0x80) {
                     /* 00 8x yy -> x times value y. */
                     n = (b - 0x80);
-                    b = pds->colors[src[src_idx++]].y;
+                    b = pds->colors[src[src_idx++]].gray;
                     for (i = 0; i < n; i++) {
                         dest[dest_idx++] = b;
                     }
@@ -210,7 +216,7 @@ int decode_rle_img(unsigned char* dest, size_t dest_len,
                 } else if ((b & 0xc0) != 0) {
                     /* 00 cx yy zz -> xyy times value z. */
                     n = ((b - 0xc0) << 8) + src[src_idx++];
-                    b = pds->colors[src[src_idx++]].y;
+                    b = pds->colors[src[src_idx++]].gray;
                     for (i = 0; i < n; i++) {
                         dest[dest_idx++] = b;
                     }
@@ -222,7 +228,7 @@ int decode_rle_img(unsigned char* dest, size_t dest_len,
                 }
             }
         } else {
-            b = pds->colors[b].y;
+            b = pds->colors[b].gray;
             dest[dest_idx++] = b;
         }
     }
@@ -233,6 +239,8 @@ int decode_rle_img(unsigned char* dest, size_t dest_len,
 
 int main(int argc, char* argv[]) {
     size_t i = 0, j = 0;
+
+    uint8_t verbose = 0;
 
     FILE* sup_file = stdin;
     char* sup_filename = NULL;
@@ -256,7 +264,7 @@ int main(int argc, char* argv[]) {
 
     uint32_t srt_start_time = 0,
              srt_end_time = 0;
-    char* srt_timestamp = NULL;
+    char* srt_timecode = NULL;
 
     size_t packet_num = 0;
     struct sup_packet* packet = NULL;
@@ -269,6 +277,8 @@ int main(int argc, char* argv[]) {
         if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "-?")) {
             print_usage_help(argv[0]);
             return EXIT_SUCCESS;
+        } else if (!strcmp(argv[i], "-v")) {
+            verbose = 1;
         } else if (!strcmp(argv[i], "-i")) {
             i++;
             if (i == argc || strlen(argv[i]) == 0) {
@@ -316,8 +326,8 @@ int main(int argc, char* argv[]) {
         fclose(sup_file);
         return EXIT_FAILURE;
     }
-    srt_timestamp = calloc(SRT_TIMECODE_LEN + 1, sizeof(char));
-    if (srt_timestamp == NULL) {
+    srt_timecode = calloc(SRT_TIMECODE_LEN + 1, sizeof(char));
+    if (srt_timecode == NULL) {
         perror("main(): calloc(SRT_TIMESTAMP)");
         free(srt_filename);
         fclose(srt_file);
@@ -356,7 +366,7 @@ int main(int argc, char* argv[]) {
             free(packet);
         }
 
-        free(srt_timestamp);
+        free(srt_timecode);
         free(srt_filename);
 
         fclose(srt_file);
@@ -375,14 +385,15 @@ int main(int argc, char* argv[]) {
             if (parse_sup_segment_pcs(packet, pcs)) {
                 ERROR("Bad PCS %lu.\n", packet_num);
                 continue;
-            } else {
-                /* dump_segment_pcs(pcs); */
+            } else if (verbose) {
+                dump_segment_pcs(pcs);
             }
 
-            if (pcs->comp_state == SUP_PCS_STATE_EPOCH_START) {
+            if (pcs->comp_state == SUP_PCS_STATE_EPOCH_START ||
+                pcs->comp_state == SUP_PCS_STATE_ACQU_POINT) {
                 /**
                  * Start a new composition: clear the image buffer,
-                 * reset the timestamps.
+                 * reset the timecodes.
                  */
                 if (canvas_width != pcs->video_width || canvas_height != pcs->video_height) {
                     if (canvas != NULL) {
@@ -400,22 +411,17 @@ int main(int argc, char* argv[]) {
 
                 pgm_clear(canvas, canvas_width, canvas_height);
 
-                srt_start_time = srt_end_time = 0;
+                srt_start_time = pcs->pts_msec;
+                srt_end_time = 0;
             }
-
-            if (srt_start_time == 0) {
-                srt_start_time = sup_pts_to_ms(packet->pts);
-            }
-
-            srt_end_time = sup_pts_to_ms(packet->pts);
 
         } else if (packet->segment_type == SUP_SEGMENT_PDS) {
             /* Extract palette. */
             if (parse_sup_segment_pds(packet, pds)) {
                 ERROR("Bad PDS %lu.\n", packet_num);
                 continue;
-            } else {
-                /* dump_segment_pds(pds); */
+            } else if (verbose) {
+                dump_segment_pds(pds);
             }
 
         } else if (packet->segment_type == SUP_SEGMENT_WDS) {
@@ -423,8 +429,8 @@ int main(int argc, char* argv[]) {
             if (parse_sup_segment_wds(packet, wds)) {
                 ERROR("Bad WDS %lu.\n", packet_num);
                 continue;
-            } else {
-                /* dump_segment_wds(wds); */
+            } else if (verbose) {
+                dump_segment_wds(wds);
             }
 
         } else if (packet->segment_type == SUP_SEGMENT_ODS) {
@@ -432,8 +438,8 @@ int main(int argc, char* argv[]) {
             if (parse_sup_segment_ods(packet, ods)) {
                 ERROR("Bad ODS %lu.\n", packet_num);
                 continue;
-            } else {
-                /* dump_segment_ods(ods); */
+            } else if (verbose) {
+                dump_segment_ods(ods);
             }
 
             if (encoded_img == NULL) {
@@ -461,41 +467,47 @@ int main(int argc, char* argv[]) {
 
             if (ods->obj_flag & SUP_ODS_LAST) {
                 /* Render the subpicture. */
-                decode_rle_img(canvas, canvas_len,
-                               encoded_img, encoded_img_len,
-                               pcs, wds, pds, ods);
+                render_sup_image(canvas, canvas_len,
+                                 encoded_img, encoded_img_len,
+                                 pcs, wds, pds, ods);
             }
 
         } else if (packet->segment_type == SUP_SEGMENT_END) {
             /* Render composition. */
 
-            /* dump_segment_end(packet); */
+            if (verbose) {
+                dump_segment_end(packet);
+            }
 
             if (pcs->comp_state == SUP_PCS_STATE_NORMAL) {
-                if (ods->obj_data_len == 0 && srt_end_time > srt_start_time) {
+                if (ods->obj_data_len == 0) {
                     /* Save the subpicture. */
-                    fprintf(srt_file, "%lu\n", pgm_file_num + 1);
-
-                    srt_render_time(srt_start_time, srt_timestamp);
-                    fprintf(srt_file, "%s --> ", srt_timestamp);
-                    srt_render_time(srt_end_time, srt_timestamp);
-                    fprintf(srt_file, "%s\n", srt_timestamp);
-
                     if (canvas != NULL) {
                         sprintf(pgm_filename, "%s%05lu.pgm",
                                 pgm_base_filename, pgm_file_num);
                         if ((pgm_file = fopen(pgm_filename, "wb")) == NULL) {
                             perror("main(): fopen(PGM)");
                             break;
-                        } else {
-                            pgm_write(pgm_file, canvas, canvas_width, canvas_height);
-                            fclose(pgm_file);
-                            fprintf(srt_file, "%s\n", pgm_filename);
                         }
-                    }
 
-                    fprintf(srt_file, "\n");
-                    pgm_file_num++;
+                        if (!pgm_write(pgm_file, canvas, canvas_width, canvas_height)) {
+                            DEBUG("Saving image %lu.\n\n", pgm_file_num);
+
+                            fprintf(srt_file, "%lu\n", pgm_file_num + 1);
+
+                            srt_render_time(srt_start_time, srt_timecode);
+                            fprintf(srt_file, "%s --> ", srt_timecode);
+                            srt_render_time(srt_end_time, srt_timecode);
+                            fprintf(srt_file, "%s\n", srt_timecode);
+
+                            fprintf(srt_file, "%s\n", pgm_filename);
+                            fprintf(srt_file, "\n");
+
+                            pgm_file_num++;
+                        }
+
+                        fclose(pgm_file);
+                    }
 
                     /* Clear the requested windows. */
                     for (i = 0; i < pcs->num_of_objects; i++) {
@@ -510,7 +522,8 @@ int main(int argc, char* argv[]) {
                         }
                     }
 
-                    srt_start_time = 0;
+                    srt_start_time = pcs->pts_msec;
+                    srt_end_time = 0;
                 }
             }
 
@@ -525,6 +538,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    DEBUG("%lu packets parsed, %lu images saved.\n", packet_num, pgm_file_num);
+
     free(ods);
     free(wds->windows);
     free(wds);
@@ -538,7 +553,7 @@ int main(int argc, char* argv[]) {
     free(encoded_img);
     free(canvas);
 
-    free(srt_timestamp);
+    free(srt_timecode);
     free(srt_filename);
     free(pgm_filename);
 

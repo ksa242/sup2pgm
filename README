@@ -13,6 +13,9 @@ Options:
     -o <base_name>  Use base_name for output files (default: movie_subtitle).
 
 
+Thanks to 0xdeadbeef for BDSup2Sub I've ripped most of the code from.
+
+
 Copyright (c) 2013, Sergey Kolchin <ksa242@gmail.com>
 All rights reserved.
 Released under 3-clause BSD License.

@@ -58,6 +58,7 @@ struct sup_color {
     uint8_t cr;
     uint8_t cb;
     uint8_t a;
+    uint8_t gray;
 };
 
 
@@ -96,6 +97,7 @@ struct sup_object {
 
 
 struct sup_segment_pcs {
+    uint32_t pts_msec;
     uint16_t video_width;
     uint16_t video_height;
     uint8_t frame_rate;

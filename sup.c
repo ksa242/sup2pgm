@@ -173,6 +173,8 @@ int parse_sup_segment_pcs(const struct sup_packet* packet, struct sup_segment_pc
         return -1;
     }
 
+    pcs->pts_msec = sup_pts_to_ms(packet->pts);
+
     memcpy(&(pcs->video_width), packet->segment + offset, 2);
     offset += 2;
     memcpy(&(pcs->video_height), packet->segment + offset, 2);
@@ -275,6 +277,9 @@ int parse_sup_segment_pds(const struct sup_packet* packet, struct sup_segment_pd
         offset++;
         memcpy(&(pds->colors[i].a), packet->segment + offset, 1);
         offset++;
+
+        pds->colors[i].gray =
+            (uint8_t) (pds->colors[i].y * pds->colors[i].a / ((double) 0xff));
     }
 
     return 0;
