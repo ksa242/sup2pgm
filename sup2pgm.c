@@ -136,7 +136,7 @@ void dump_segment_end(const struct sup_packet* packet) {
 
 
 int render_sup_image(unsigned char* dest, size_t dest_len,
-                     const unsigned char* src, size_t src_len,
+                     const unsigned char* src, size_t src_len, uint16_t obj_id,
                      const struct sup_segment_pcs* pcs,
                      const struct sup_segment_wds* wds,
                      const struct sup_segment_pds* pds,
@@ -156,7 +156,7 @@ int render_sup_image(unsigned char* dest, size_t dest_len,
     unsigned char b;
 
     for (i = 0; i < pcs->num_of_objects; i++) {
-        if (pcs->objects[i].obj_id == ods->obj_id) {
+        if (pcs->objects[i].obj_id == obj_id) {
             obj_pos_x = pcs->objects[i].obj_pos_x;
             obj_pos_y = pcs->objects[i].obj_pos_y;
             for (j = 0; j < wds->num_of_windows; j++) {
@@ -168,7 +168,6 @@ int render_sup_image(unsigned char* dest, size_t dest_len,
                     break;
                 }
             }
-            break;
         }
     }
 
@@ -237,6 +236,45 @@ int render_sup_image(unsigned char* dest, size_t dest_len,
 }
 
 
+int save_sup_image(FILE* srt_file,
+                   size_t subtitle_num,
+                   uint32_t start_time, uint32_t end_time, char* timecode_buf,
+                   const char* img_base_filename, char* img_filename_buf,
+                   const unsigned char* img, size_t img_width, size_t img_height) {
+    int result = -1;
+    FILE* img_file;
+
+    if (img == NULL) {
+        return result;
+    }
+
+    sprintf(img_filename_buf, "%s%05lu.pgm", img_base_filename, subtitle_num);
+    if ((img_file = fopen(img_filename_buf, "wb")) == NULL) {
+        perror("main(): fopen(PGM)");
+        return result;
+    }
+
+    if (!pgm_write(img_file, img, img_width, img_height)) {
+        result = 0;
+
+        DEBUG("Saving image %lu.\n\n", subtitle_num);
+
+        fprintf(srt_file, "%lu\n", subtitle_num + 1);
+
+        srt_render_time(start_time, timecode_buf);
+        fprintf(srt_file, "%s --> ", timecode_buf);
+        srt_render_time(end_time, timecode_buf);
+        fprintf(srt_file, "%s\n", timecode_buf);
+
+        fprintf(srt_file, "%s\n", img_filename_buf);
+        fprintf(srt_file, "\n");
+    }
+
+    fclose(img_file);
+    return result;
+}
+
+
 int main(int argc, char* argv[]) {
     size_t i = 0, j = 0;
 
@@ -247,8 +285,10 @@ int main(int argc, char* argv[]) {
 
     FILE* srt_file = NULL;
     char* srt_filename = NULL;
+    uint32_t srt_start_time = 0,
+             srt_end_time = 0;
+    char* srt_timecode = NULL;
 
-    FILE* pgm_file = NULL;
     size_t pgm_file_num = 0;
     char* pgm_base_filename = "movie_subtitle";
     char* pgm_filename = NULL;
@@ -258,13 +298,9 @@ int main(int argc, char* argv[]) {
            canvas_width = 0,
            canvas_height = 0;
 
-    unsigned char* encoded_img = NULL;
-    size_t encoded_img_max_len = 0,
-           encoded_img_len = 0;
-
-    uint32_t srt_start_time = 0,
-             srt_end_time = 0;
-    char* srt_timecode = NULL;
+    size_t subimgs_cnt = 0;
+    struct subimage** subimgs;
+    struct subimage* subimg = NULL;
 
     size_t packet_num = 0;
     struct sup_packet* packet = NULL;
@@ -335,16 +371,18 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
+    subimgs = NULL;
+
     packet = calloc(1, sizeof(struct sup_packet));
     pcs = calloc(1, sizeof(struct sup_segment_pcs));
     pds = calloc(1, sizeof(struct sup_segment_pds));
     wds = calloc(1, sizeof(struct sup_segment_wds));
     ods = calloc(1, sizeof(struct sup_segment_ods));
-    if (init_sup_packet(packet) ||
-        init_sup_segment_pcs(pcs) ||
-        init_sup_segment_pds(pds) ||
-        init_sup_segment_wds(wds) ||
-        init_sup_segment_ods(ods)) {
+    if (sup_init_packet(packet) ||
+        sup_init_segment_pcs(pcs) ||
+        sup_init_segment_pds(pds) ||
+        sup_init_segment_wds(wds) ||
+        sup_init_segment_ods(ods)) {
 
         ERROR("SUP placeholders' initialization failed.\n");
 
@@ -376,21 +414,20 @@ int main(int argc, char* argv[]) {
     }
 
     for (; !feof(sup_file); packet_num++) {
-        if (read_sup_packet(sup_file, packet)) {
+        if (sup_read_packet(sup_file, packet)) {
             continue;
         }
 
         if (packet->segment_type == SUP_SEGMENT_PCS) {
             /* Set up composition. */
-            if (parse_sup_segment_pcs(packet, pcs)) {
+            if (sup_parse_segment_pcs(packet, pcs)) {
                 ERROR("Bad PCS %lu.\n", packet_num);
                 continue;
             } else if (verbose) {
                 dump_segment_pcs(pcs);
             }
 
-            if (pcs->comp_state == SUP_PCS_STATE_EPOCH_START ||
-                pcs->comp_state == SUP_PCS_STATE_ACQU_POINT) {
+            if (pcs->comp_state == SUP_PCS_STATE_EPOCH_START) {
                 /**
                  * Start a new composition: clear the image buffer,
                  * reset the timecodes.
@@ -409,15 +446,30 @@ int main(int argc, char* argv[]) {
                     }
                 }
 
-                pgm_clear(canvas, canvas_width, canvas_height);
+                srt_start_time = pcs->pts_msec;
+                srt_end_time = 0;
+
+            } else if (pcs->pts_msec >= srt_start_time + SUP2PGM_MERGE_THRESHOLD) {
+                /* Save the previously rendered composition. */
+                srt_end_time = pcs->pts_msec;
+
+                if (!save_sup_image(srt_file,
+                                    pgm_file_num,
+                                    srt_start_time, srt_end_time, srt_timecode,
+                                    pgm_base_filename, pgm_filename,
+                                    canvas, canvas_width, canvas_height)) {
+                    pgm_file_num++;
+                }
 
                 srt_start_time = pcs->pts_msec;
                 srt_end_time = 0;
             }
 
+            pgm_clear(canvas, canvas_width, canvas_height);
+
         } else if (packet->segment_type == SUP_SEGMENT_PDS) {
             /* Extract palette. */
-            if (parse_sup_segment_pds(packet, pds)) {
+            if (sup_parse_segment_pds(packet, pds)) {
                 ERROR("Bad PDS %lu.\n", packet_num);
                 continue;
             } else if (verbose) {
@@ -426,7 +478,7 @@ int main(int argc, char* argv[]) {
 
         } else if (packet->segment_type == SUP_SEGMENT_WDS) {
             /* Extract windows info. */
-            if (parse_sup_segment_wds(packet, wds)) {
+            if (sup_parse_segment_wds(packet, wds)) {
                 ERROR("Bad WDS %lu.\n", packet_num);
                 continue;
             } else if (verbose) {
@@ -435,42 +487,60 @@ int main(int argc, char* argv[]) {
 
         } else if (packet->segment_type == SUP_SEGMENT_ODS) {
             /* Decode and render caption image. */
-            if (parse_sup_segment_ods(packet, ods)) {
+            if (sup_parse_segment_ods(packet, ods)) {
                 ERROR("Bad ODS %lu.\n", packet_num);
                 continue;
             } else if (verbose) {
                 dump_segment_ods(ods);
             }
 
-            if (encoded_img == NULL) {
-                encoded_img_max_len = SUP_PACKET_MAX_SEGMENT_LEN;
-                if ((encoded_img = malloc(encoded_img_max_len)) == NULL) {
-                    perror("main(): malloc(ENCODED_IMG)");
+            if (subimgs_cnt < ods->obj_id + 1) {
+                subimgs = realloc(subimgs, (ods->obj_id + 1) * sizeof(struct subimage*));
+                if (subimgs == NULL) {
+                    perror("main(): realloc(SUBIMGS)");
+                    break;
+                } else {
+                    for (i = subimgs_cnt; i <= ods->obj_id; i++) {
+                        subimgs[i] = malloc(sizeof(struct subimage));
+                        if (subimgs[i] == NULL) {
+                            perror("main(): malloc(SUBIMG)");
+                        } else {
+                            subimgs[i]->max_len = 0;
+                            subimgs[i]->len = 0;
+                            subimgs[i]->img = NULL;
+                        }
+                    }
+                    subimgs_cnt = ods->obj_id + 1;
+                }
+            }
+
+            subimg = subimgs[ods->obj_id];
+            if (subimg == NULL) {
+                break;
+            }
+
+            if (subimg->img == NULL) {
+                subimg->max_len = SUP_PACKET_MAX_SEGMENT_LEN;
+                if ((subimg->img = malloc(subimg->max_len)) == NULL) {
+                    perror("main(): malloc(SUBIMG)");
                     break;
                 }
             }
 
             if (ods->obj_flag & SUP_ODS_FIRST) {
-                encoded_img_len = 0;
+                subimg->len = 0;
             }
 
-            if (encoded_img_len + ods->raw_data_len > encoded_img_max_len) {
-                encoded_img_max_len = encoded_img_len + ods->raw_data_len;
-                if ((encoded_img = realloc(encoded_img, encoded_img_max_len)) == NULL) {
-                    perror("main(): realloc(ENCODED_IMG)");
+            if (subimg->len + ods->raw_data_len > subimg->max_len) {
+                subimg->max_len = subimg->len + ods->raw_data_len;
+                if ((subimg->img = realloc(subimg->img, subimg->max_len)) == NULL) {
+                    perror("main(): realloc(SUBIMG)");
                     break;
                 }
             }
 
-            memcpy(encoded_img + encoded_img_len, ods->raw_data, ods->raw_data_len);
-            encoded_img_len += ods->raw_data_len;
-
-            if (ods->obj_flag & SUP_ODS_LAST) {
-                /* Render the subpicture. */
-                render_sup_image(canvas, canvas_len,
-                                 encoded_img, encoded_img_len,
-                                 pcs, wds, pds, ods);
-            }
+            memcpy(subimg->img + subimg->len, ods->raw_data, ods->raw_data_len);
+            subimg->len += ods->raw_data_len;
 
         } else if (packet->segment_type == SUP_SEGMENT_END) {
             /* Render composition. */
@@ -479,59 +549,22 @@ int main(int argc, char* argv[]) {
                 dump_segment_end(packet);
             }
 
-            if (pcs->comp_state == SUP_PCS_STATE_NORMAL) {
-                if (ods->obj_data_len == 0) {
-                    /* Save the subpicture. */
-                    if (canvas != NULL) {
-                        sprintf(pgm_filename, "%s%05lu.pgm",
-                                pgm_base_filename, pgm_file_num);
-                        if ((pgm_file = fopen(pgm_filename, "wb")) == NULL) {
-                            perror("main(): fopen(PGM)");
-                            break;
-                        }
-
-                        if (!pgm_write(pgm_file, canvas, canvas_width, canvas_height)) {
-                            DEBUG("Saving image %lu.\n\n", pgm_file_num);
-
-                            fprintf(srt_file, "%lu\n", pgm_file_num + 1);
-
-                            srt_render_time(srt_start_time, srt_timecode);
-                            fprintf(srt_file, "%s --> ", srt_timecode);
-                            srt_render_time(srt_end_time, srt_timecode);
-                            fprintf(srt_file, "%s\n", srt_timecode);
-
-                            fprintf(srt_file, "%s\n", pgm_filename);
-                            fprintf(srt_file, "\n");
-
-                            pgm_file_num++;
-                        }
-
-                        fclose(pgm_file);
+            if (pcs->num_of_objects > 0) {
+                for (i = 0; i < pcs->num_of_objects; i++) {
+                    if (pcs->objects[i].obj_id < subimgs_cnt) {
+                        subimg = subimgs[pcs->objects[i].obj_id];
+                        render_sup_image(canvas, canvas_len,
+                                         subimg->img, subimg->len, pcs->objects[i].obj_id,
+                                         pcs, wds, pds, ods);
                     }
-
-                    /* Clear the requested windows. */
-                    for (i = 0; i < pcs->num_of_objects; i++) {
-                        for (j = 0; j < wds->num_of_windows; j++) {
-                            if (wds->windows[j].win_id == pcs->objects[i].win_id) {
-                                pgm_clear_region(canvas, canvas_width, canvas_height,
-                                                 wds->windows[j].width,
-                                                 wds->windows[j].height,
-                                                 wds->windows[j].x,
-                                                 wds->windows[j].y);
-                            }
-                        }
-                    }
-
-                    srt_start_time = pcs->pts_msec;
-                    srt_end_time = 0;
                 }
             }
 
             /* Reset composition placeholders. */
-            init_sup_segment_pcs(pcs);
-            init_sup_segment_pds(pds);
-            init_sup_segment_wds(wds);
-            init_sup_segment_ods(ods);
+            sup_init_segment_pcs(pcs);
+            sup_init_segment_pds(pds);
+            sup_init_segment_wds(wds);
+            sup_init_segment_ods(ods);
         } else {
             ERROR("Unknown segment type 0x%02x for packet %lu.\n",
                   packet->segment_type, packet_num);
@@ -550,15 +583,21 @@ int main(int argc, char* argv[]) {
     free(packet->segment);
     free(packet);
 
-    free(encoded_img);
+    for (i = 0; i < subimgs_cnt; i++) {
+        free(subimgs[i]->img);
+        free(subimgs[i]);
+    }
+    free(subimgs);
+
     free(canvas);
+
+    free(pgm_filename);
 
     free(srt_timecode);
     free(srt_filename);
-    free(pgm_filename);
+    fclose(srt_file);
 
     fclose(sup_file);
-    fclose(srt_file);
 
     return EXIT_SUCCESS;
 }

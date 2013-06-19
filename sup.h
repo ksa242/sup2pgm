@@ -131,19 +131,19 @@ struct sup_segment_wds {
 float sup_frame_rate_by_id(uint8_t frame_rate_id);
 unsigned long sup_pts_to_ms(uint32_t pts);
 
-int init_sup_packet(struct sup_packet* packet);
-int read_sup_packet(FILE* fd, struct sup_packet* packet);
+int sup_init_packet(struct sup_packet* packet);
+int sup_read_packet(FILE* fd, struct sup_packet* packet);
 
-int init_sup_segment_pcs(struct sup_segment_pcs* pcs);
-int parse_sup_segment_pcs(const struct sup_packet* packet, struct sup_segment_pcs* pcs);
+int sup_init_segment_pcs(struct sup_segment_pcs* pcs);
+int sup_parse_segment_pcs(const struct sup_packet* packet, struct sup_segment_pcs* pcs);
 
-int init_sup_segment_pds(struct sup_segment_pds* pds);
-int parse_sup_segment_pds(const struct sup_packet* packet, struct sup_segment_pds* pds);
+int sup_init_segment_pds(struct sup_segment_pds* pds);
+int sup_parse_segment_pds(const struct sup_packet* packet, struct sup_segment_pds* pds);
 
-int init_sup_segment_wds(struct sup_segment_wds* wds);
-int parse_sup_segment_wds(const struct sup_packet* packet, struct sup_segment_wds* wds);
+int sup_init_segment_wds(struct sup_segment_wds* wds);
+int sup_parse_segment_wds(const struct sup_packet* packet, struct sup_segment_wds* wds);
 
-int init_sup_segment_ods(struct sup_segment_ods* ods);
-int parse_sup_segment_ods(const struct sup_packet* packet, struct sup_segment_ods* ods);
+int sup_init_segment_ods(struct sup_segment_ods* ods);
+int sup_parse_segment_ods(const struct sup_packet* packet, struct sup_segment_ods* ods);
 
 #endif  /* SUP2PGM_SUP_H */

@@ -40,7 +40,7 @@ unsigned long sup_pts_to_ms(uint32_t pts) {
 }
 
 
-int init_sup_packet(struct sup_packet* packet) {
+int sup_init_packet(struct sup_packet* packet) {
     if (packet == NULL) {
         return -1;
     }
@@ -56,7 +56,7 @@ int init_sup_packet(struct sup_packet* packet) {
     if (packet->segment == NULL) {
         packet->segment = calloc(SUP_PACKET_MAX_SEGMENT_LEN, sizeof(char));
         if (packet->segment == NULL) {
-            perror("init_sup_packet(): calloc()");
+            perror("sup_init_packet(): calloc()");
             return -1;
         }
     }
@@ -65,17 +65,17 @@ int init_sup_packet(struct sup_packet* packet) {
 }
 
 
-int read_sup_packet(FILE* fd, struct sup_packet* packet) {
+int sup_read_packet(FILE* fd, struct sup_packet* packet) {
     size_t n, received;
 
-    if (init_sup_packet(packet)) {
+    if (sup_init_packet(packet)) {
         return -1;
     }
 
     /* Check the packet marker. */
     if (fread(&(packet->marker), 2, 1, fd) != 1) {
         if (!feof(fd)) {
-            perror("read_sup_packet(): fread(marker)");
+            perror("sup_read_packet(): fread(marker)");
         }
         return -1;
     } else {
@@ -88,23 +88,23 @@ int read_sup_packet(FILE* fd, struct sup_packet* packet) {
 
     /* Read the rest of the header. */
     if (fread(&(packet->pts), 4, 1, fd) != 1) {
-        perror("read_sup_packet(): fread(PTS)");
+        perror("sup_read_packet(): fread(PTS)");
         return -1;
     } else {
         packet->pts = ntohl(packet->pts);
     }
     if (fread(&(packet->dts), 4, 1, fd) != 1) {
-        perror("read_sup_packet(): fread(DTS)");
+        perror("sup_read_packet(): fread(DTS)");
         return -1;
     } else {
         packet->dts = ntohl(packet->dts);
     }
     if (fread(&(packet->segment_type), 1, 1, fd) != 1) {
-        perror("read_sup_packet(): fread(segment_type)");
+        perror("sup_read_packet(): fread(segment_type)");
         return -1;
     }
     if (fread(&(packet->segment_len), 2, 1, fd) != 1) {
-        perror("read_sup_packet(): fread(segment_len)");
+        perror("sup_read_packet(): fread(segment_len)");
         return -1;
     } else {
         packet->segment_len = ntohs(packet->segment_len);
@@ -119,7 +119,7 @@ int read_sup_packet(FILE* fd, struct sup_packet* packet) {
             if (feof(fd)) {
                 fprintf(stderr, "Unexpected EOF.\n");
             } else {
-                perror("read_sup_packet(): fread(segment)");
+                perror("sup_read_packet(): fread(segment)");
             }
             return -1;
         } else {
@@ -131,7 +131,7 @@ int read_sup_packet(FILE* fd, struct sup_packet* packet) {
 }
 
 
-int init_sup_segment_pcs(struct sup_segment_pcs* pcs) {
+int sup_init_segment_pcs(struct sup_segment_pcs* pcs) {
     if (pcs == NULL) {
         return -1;
     }
@@ -150,7 +150,7 @@ int init_sup_segment_pcs(struct sup_segment_pcs* pcs) {
     if (pcs->objects == NULL) {
         pcs->objects = calloc(0xff, sizeof(struct sup_object));
         if (pcs->objects == NULL) {
-            perror("init_sup_segment_pcs(): calloc()");
+            perror("sup_init_segment_pcs(): calloc()");
             return -1;
         }
     }
@@ -159,12 +159,12 @@ int init_sup_segment_pcs(struct sup_segment_pcs* pcs) {
 }
 
 
-int parse_sup_segment_pcs(const struct sup_packet* packet, struct sup_segment_pcs* pcs) {
+int sup_parse_segment_pcs(const struct sup_packet* packet, struct sup_segment_pcs* pcs) {
     size_t i, offset = 0;
 
     if (packet == NULL) {
         return -1;
-    } else if (init_sup_segment_pcs(pcs)) {
+    } else if (sup_init_segment_pcs(pcs)) {
         return -1;
     }
 
@@ -227,7 +227,7 @@ int parse_sup_segment_pcs(const struct sup_packet* packet, struct sup_segment_pc
 }
 
 
-int init_sup_segment_pds(struct sup_segment_pds* pds) {
+int sup_init_segment_pds(struct sup_segment_pds* pds) {
     if (pds == NULL) {
         return -1;
     }
@@ -237,7 +237,7 @@ int init_sup_segment_pds(struct sup_segment_pds* pds) {
     if (pds->colors == NULL) {
         pds->colors = calloc(0xff, sizeof(struct sup_color));
         if (pds->colors == NULL) {
-            perror("init_sup_segment_pds(): calloc()");
+            perror("sup_init_segment_pds(): calloc()");
             return -1;
         }
     }
@@ -246,12 +246,12 @@ int init_sup_segment_pds(struct sup_segment_pds* pds) {
 }
 
 
-int parse_sup_segment_pds(const struct sup_packet* packet, struct sup_segment_pds* pds) {
+int sup_parse_segment_pds(const struct sup_packet* packet, struct sup_segment_pds* pds) {
     size_t i, offset = 0;
 
     if (packet == NULL) {
         return -1;
-    } else if (init_sup_segment_pds(pds)) {
+    } else if (sup_init_segment_pds(pds)) {
         return -1;
     }
 
@@ -286,7 +286,7 @@ int parse_sup_segment_pds(const struct sup_packet* packet, struct sup_segment_pd
 }
 
 
-int init_sup_segment_wds(struct sup_segment_wds* wds) {
+int sup_init_segment_wds(struct sup_segment_wds* wds) {
     if (wds == NULL) {
         return -1;
     }
@@ -295,7 +295,7 @@ int init_sup_segment_wds(struct sup_segment_wds* wds) {
     if (wds->windows == NULL) {
         wds->windows = calloc(0xff, sizeof(struct sup_window));
         if (wds->windows == NULL) {
-            perror("init_sup_segment_wds(): calloc()");
+            perror("sup_init_segment_wds(): calloc()");
             return -1;
         }
     }
@@ -304,12 +304,12 @@ int init_sup_segment_wds(struct sup_segment_wds* wds) {
 }
 
 
-int parse_sup_segment_wds(const struct sup_packet* packet, struct sup_segment_wds* wds) {
+int sup_parse_segment_wds(const struct sup_packet* packet, struct sup_segment_wds* wds) {
     size_t i, offset = 0;
 
     if (packet == NULL) {
         return -1;
-    } else if (init_sup_segment_wds(wds)) {
+    } else if (sup_init_segment_wds(wds)) {
         return -1;
     }
 
@@ -350,7 +350,7 @@ int parse_sup_segment_wds(const struct sup_packet* packet, struct sup_segment_wd
 }
 
 
-int init_sup_segment_ods(struct sup_segment_ods* ods) {
+int sup_init_segment_ods(struct sup_segment_ods* ods) {
     if (ods == NULL) {
         return -1;
     }
@@ -369,13 +369,13 @@ int init_sup_segment_ods(struct sup_segment_ods* ods) {
 }
 
 
-int parse_sup_segment_ods(const struct sup_packet* packet, struct sup_segment_ods* ods) {
+int sup_parse_segment_ods(const struct sup_packet* packet, struct sup_segment_ods* ods) {
     uint8_t b;
     size_t offset = 0;
 
     if (packet == NULL) {
         return -1;
-    } else if (init_sup_segment_ods(ods)) {
+    } else if (sup_init_segment_ods(ods)) {
         return -1;
     }
 
