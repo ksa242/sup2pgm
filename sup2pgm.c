@@ -276,7 +276,7 @@ int save_sup_image(FILE* srt_file,
 
 
 int main(int argc, char* argv[]) {
-    size_t i = 0, j = 0;
+    size_t i = 0;
 
     uint8_t verbose = 0;
 
