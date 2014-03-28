@@ -1,12 +1,14 @@
 NAME = sup2pgm
 
-CC = gcc
-CFLAGS =
+CROSS_COMPILE ?=
+CC ?= gcc
+CFLAGS ?= -O2
+CFLAGS_EXTRA = -std=c99 -Wall
 
 all: pgm.c srt.c sup.c sup2pgm.c
-	$(CC) $(CFLAGS) -o $(NAME) $^
+	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(CFLAGS_EXTRA) -o $(NAME) $^
 
 .PHONY: clean
 clean:
-	-rm *.o
 	-rm $(NAME)
+	-rm *.o
